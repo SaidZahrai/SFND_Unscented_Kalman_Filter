@@ -131,7 +131,7 @@ void UKF::Prediction(double delta_t)
                            Xsig_pred_, x_, P_);
 }
 
-void UKF::UpdateLidar(MeasurementPackage meas_package)
+void UKF::UpdateRadar(MeasurementPackage meas_package)
 {
   /**
    * TODO: Complete this function! Use lidar data to update the belief
@@ -149,12 +149,12 @@ void UKF::UpdateLidar(MeasurementPackage meas_package)
                           Xsig_pred_,
                           Zsig, z_pred, S_pred);
 
-  updateState(n_x_, n_aug_, 2, lambda_,
+  updateState(n_x_, n_aug_, n_z, lambda_,
               Zsig, z_pred, S_pred, meas_package.raw_measurements_,
               Xsig_pred_, x_, P_);
 }
 
-void UKF::UpdateRadar(MeasurementPackage meas_package)
+void UKF::UpdateLidar(MeasurementPackage meas_package)
 {
   /**
    * TODO: Complete this function! Use radar data to update the belief
@@ -172,7 +172,7 @@ void UKF::UpdateRadar(MeasurementPackage meas_package)
                           Xsig_pred_,
                           Zsig, z_pred, S_pred);
 
-  updateState(n_x_, n_aug_, 2, lambda_,
+  updateState(n_x_, n_aug_, n_z, lambda_,
               Zsig, z_pred, S_pred, meas_package.raw_measurements_,
               Xsig_pred_, x_, P_);
 }

@@ -52,6 +52,13 @@ UKF::UKF()
   Xsig_aug_ = MatrixXd(n_aug_, 2 * n_aug_ + 1); // augmented sigma points matrix
   Xsig_pred_ = MatrixXd(n_x_, 2 * n_aug_ + 1);  // predicted sigma points matrix
   weights_ = VectorXd(2 * n_aug_ + 1);          // Weights of sigma points
+    double weight_0 = lambda_ / (lambda_ + n_aug_);
+    weights_(0) = weight_0;
+    for (int i = 1; i < 2 * n_aug_ + 1; ++i)
+    { 
+        double weight = 0.5 / (n_aug_ + lambda_);
+        weights_(i) = weight;
+    }
 }
 
 UKF::~UKF() {}
@@ -127,7 +134,7 @@ void UKF::Prediction(double delta_t)
   sigmaPointPrediction(n_x_, n_aug_,
                        delta_t, Xsig_aug_, Xsig_pred_);
 
-  predictMeanAndCovariance(n_x_, n_aug_, lambda_,
+  predictMeanAndCovariance(n_x_, n_aug_, lambda_, weights_,
                            Xsig_pred_, x_, P_);
 }
 
@@ -144,12 +151,12 @@ void UKF::UpdateRadar(MeasurementPackage meas_package)
   VectorXd z_pred = VectorXd(n_z);               // mean predicted measurement
   MatrixXd S_pred = MatrixXd(n_z, n_z);          // predicted measurement covariance
 
-  predictRadarMeasurement(n_x_, n_aug_, n_z, lambda_,
+  predictRadarMeasurement(n_x_, n_aug_, n_z, lambda_, weights_,
                           std_radr_, std_radphi_, std_radrd_,
                           Xsig_pred_,
                           Zsig, z_pred, S_pred);
 
-  updateState(n_x_, n_aug_, n_z, lambda_,
+  updateState(n_x_, n_aug_, n_z, lambda_, weights_,
               Zsig, z_pred, S_pred, meas_package.raw_measurements_,
               Xsig_pred_, x_, P_);
 }
@@ -167,12 +174,12 @@ void UKF::UpdateLidar(MeasurementPackage meas_package)
   VectorXd z_pred = VectorXd(n_z);               // mean predicted measurement
   MatrixXd S_pred = MatrixXd(n_z, n_z);          // predicted measurement covariance
 
-  predictLidarMeasurement(n_x_, n_aug_, n_z, lambda_,
+  predictLidarMeasurement(n_x_, n_aug_, n_z, lambda_, weights_,
                           std_laspx_, std_laspy_,
                           Xsig_pred_,
                           Zsig, z_pred, S_pred);
 
-  updateState(n_x_, n_aug_, n_z, lambda_,
+  updateState(n_x_, n_aug_, n_z, lambda_, weights_,
               Zsig, z_pred, S_pred, meas_package.raw_measurements_,
               Xsig_pred_, x_, P_);
 }

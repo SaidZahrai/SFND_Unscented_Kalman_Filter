@@ -3,6 +3,13 @@
 using Eigen::MatrixXd;
 using Eigen::VectorXd;
 
+// Help function to avoid rewriting the same code
+void normalizeAngle(double angle)
+{    
+    while (angle > M_PI) angle -= 2. * M_PI;
+    while (angle < -M_PI) angle += 2. * M_PI;
+}
+
 // Rewrite of the lesson exercise
 // Starting from the current meand and covariance matrix and process model acceleration noises,
 // it creates augmented sigma points.
@@ -87,6 +94,7 @@ void sigmaPointPrediction(int n_x, int n_aug, double delta_t,
         v_p = v_p + nu_a * delta_t;
 
         yaw_p = yaw_p + 0.5 * nu_yawdd * delta_t * delta_t;
+        normalizeAngle(yaw_p);
         yawd_p = yawd_p + nu_yawdd * delta_t;
 
         // write predicted sigma point into right column
@@ -100,42 +108,26 @@ void sigmaPointPrediction(int n_x, int n_aug, double delta_t,
 
 // Rewrite of the lesson exercise
 // Starting from a set of sigma points, it uses weights to calculate the mean state and covariance matrix
-void predictMeanAndCovariance(int n_x, int n_aug, double lambda,
+void predictMeanAndCovariance(int n_x, int n_aug, double lambda, VectorXd weights,
                               MatrixXd &Xsig_pred,
                               VectorXd &x, MatrixXd &P)
 {
-
-    // create vector for weights
-    VectorXd weights = VectorXd(2 * n_aug + 1);
-
-    // set weights
-    double weight_0 = lambda / (lambda + n_aug);
-    weights(0) = weight_0;
-    for (int i = 1; i < 2 * n_aug + 1; ++i)
-    { // 2n+1 weights
-        double weight = 0.5 / (n_aug + lambda);
-        weights(i) = weight;
-    }
-
     // predicted state mean
     x.fill(0.0);
     for (int i = 0; i < 2 * n_aug + 1; ++i)
-    { // iterate over sigma points
+    {
         x = x + weights(i) * Xsig_pred.col(i);
     }
+    normalizeAngle(x(3));
 
     // predicted state covariance matrix
     P.fill(0.0);
     for (int i = 0; i < 2 * n_aug + 1; ++i)
-    { // iterate over sigma points
-        // state difference
+    {
+        // state difference and angle normalization
         VectorXd x_diff = Xsig_pred.col(i) - x;
-        // angle normalization
-        while (x_diff(3) > M_PI)
-            x_diff(3) -= 2. * M_PI;
-        while (x_diff(3) < -M_PI)
-            x_diff(3) += 2. * M_PI;
-
+        normalizeAngle(x_diff(3));
+        
         P = P + weights(i) * x_diff * x_diff.transpose();
     }
 }
@@ -144,23 +136,11 @@ void predictMeanAndCovariance(int n_x, int n_aug, double lambda,
 // Starting from the set of predicted sigma pointsin state space, it first uses the measurement model
 // to calculate how the states would be seen by the radar, and then, it uses weights to calculate the
 // mean state and covariance matrix of the transforemed sigma point in the radar measurement space.
-void predictRadarMeasurement(int n_x, int n_aug, int n_z, double lambda,
+void predictRadarMeasurement(int n_x, int n_aug, int n_z, double lambda, VectorXd weights,
                              double std_radr, double std_radphi, double std_radrd,
                              MatrixXd &Xsig_pred,
                              MatrixXd &Zsig, VectorXd &z_pred, MatrixXd &S)
 {
-
-    // set vector for weights
-    VectorXd weights = VectorXd(2 * n_aug + 1);
-    double weight_0 = lambda / (lambda + n_aug);
-    double weight = 0.5 / (lambda + n_aug);
-    weights(0) = weight_0;
-
-    for (int i = 1; i < 2 * n_aug + 1; ++i)
-    {
-        weights(i) = weight;
-    }
-
     // transform sigma points into measurement space
     for (int i = 0; i < 2 * n_aug + 1; ++i)
     { // 2n+1 simga points
@@ -178,27 +158,19 @@ void predictRadarMeasurement(int n_x, int n_aug, int n_z, double lambda,
         Zsig(1, i) = atan2(p_y, p_x);                                     // phi
         Zsig(2, i) = (p_x * v1 + p_y * v2) / sqrt(p_x * p_x + p_y * p_y); // r_dot
     }
-
-    // mean predicted measurement
+    // mean predicted measurement and normalization
     z_pred.fill(0.0);
     for (int i = 0; i < 2 * n_aug + 1; ++i)
     {
         z_pred = z_pred + weights(i) * Zsig.col(i);
     }
+    normalizeAngle(z_pred(1));
 
     // innovation covariance matrix S
     S.fill(0.0);
     for (int i = 0; i < 2 * n_aug + 1; ++i)
-    { // 2n+1 simga points
-        // residual
+    { 
         VectorXd z_diff = Zsig.col(i) - z_pred;
-
-        // angle normalization
-        while (z_diff(1) > M_PI)
-            z_diff(1) -= 2. * M_PI;
-        while (z_diff(1) < -M_PI)
-            z_diff(1) += 2. * M_PI;
-
         S = S + weights(i) * z_diff * z_diff.transpose();
     }
 
@@ -214,23 +186,11 @@ void predictRadarMeasurement(int n_x, int n_aug, int n_z, double lambda,
 // Starting from the set of predicted sigma pointsin state space, it first uses the measurement model
 // to calculate how the states would be seen by the radar, and then, it uses weights to calculate the
 // mean state and covariance matrix of the transforemed sigma point in the radar measurement space.
-void predictLidarMeasurement(int n_x, int n_aug, int n_z, double lambda,
+void predictLidarMeasurement(int n_x, int n_aug, int n_z, double lambda, VectorXd weights,
                              double std_lidx, double std_lidy,
                              MatrixXd &Xsig_pred,
                              MatrixXd &Zsig, VectorXd &z_pred, MatrixXd &S)
 {
-
-    // set vector for weights
-    VectorXd weights = VectorXd(2 * n_aug + 1);
-    double weight_0 = lambda / (lambda + n_aug);
-    double weight = 0.5 / (lambda + n_aug);
-    weights(0) = weight_0;
-
-    for (int i = 1; i < 2 * n_aug + 1; ++i)
-    {
-        weights(i) = weight;
-    }
-
     // transform sigma points into measurement space
     for (int i = 0; i < 2 * n_aug + 1; ++i)
     { // 2n+1 simga points
@@ -258,10 +218,8 @@ void predictLidarMeasurement(int n_x, int n_aug, int n_z, double lambda,
     // innovation covariance matrix S
     S.fill(0.0);
     for (int i = 0; i < 2 * n_aug + 1; ++i)
-    { // 2n+1 simga points
-        // residual
+    {
         VectorXd z_diff = Zsig.col(i) - z_pred;
-
         S = S + weights(i) * z_diff * z_diff.transpose();
     }
 
@@ -282,59 +240,31 @@ void predictLidarMeasurement(int n_x, int n_aug, int n_z, double lambda,
 // update the mean state by x_pred = x_pred + K * z_diff.
 // Equally, the predicted covariance matrix is updated by P_pred = P_pred - K * S * K.transpose();.
 
-void updateState(int n_x, int n_aug, int n_z, double lambda,
+void updateState(int n_x, int n_aug, int n_z, double lambda, VectorXd weights,
                  MatrixXd &Zsig, VectorXd &z_pred, MatrixXd &S, VectorXd &z,
                  MatrixXd &Xsig_pred, VectorXd &x_pred, MatrixXd &P_pred)
 {
-
-    // set vector for weights
-    VectorXd weights = VectorXd(2 * n_aug + 1);
-    double weight_0 = lambda / (lambda + n_aug);
-    double weight = 0.5 / (lambda + n_aug);
-    weights(0) = weight_0;
-
-    for (int i = 1; i < 2 * n_aug + 1; ++i)
-    {
-        weights(i) = weight;
-    }
-
+    // calculate cross correlation matrix using 2n+1 simga points
     MatrixXd Tc = MatrixXd(n_x, n_z);
-
-    // calculate cross correlation matrix
     Tc.fill(0.0);
     for (int i = 0; i < 2 * n_aug + 1; ++i)
-    { // 2n+1 simga points
-        // residual
+    {
+        // Calculate measurement differences and normalize the angle, i.e. the 2nd element
         VectorXd z_diff = Zsig.col(i) - z_pred;
-        // angle normalization
-        while (z_diff(1) > M_PI)
-            z_diff(1) -= 2. * M_PI;
-        while (z_diff(1) < -M_PI)
-            z_diff(1) += 2. * M_PI;
-
-        // state difference
-        VectorXd x_diff = Xsig_pred.col(i) - x_pred;
-
-        // angle normalization
-        while (x_diff(3) > M_PI)
-            x_diff(3) -= 2. * M_PI;
-        while (x_diff(3) < -M_PI)
-            x_diff(3) += 2. * M_PI;
-
+        normalizeAngle(z_diff(1));
+        
+        // Calculate state differences and normalize the angle, i.e. the 4th element
+        VectorXd x_diff = Xsig_pred.col(i) - x_pred; 
+        normalizeAngle(x_diff(3));
+        
         Tc = Tc + weights(i) * x_diff * z_diff.transpose();
     }
 
-    // Kalman gain K;
-    MatrixXd K = Tc * S.inverse();
+    MatrixXd K = Tc * S.inverse(); // Kalman gain K;
 
-    // residual
-    VectorXd z_diff = z - z_pred;
-
-    // angle normalization
-    while (z_diff(1) > M_PI)
-        z_diff(1) -= 2. * M_PI;
-    while (z_diff(1) < -M_PI)
-        z_diff(1) += 2. * M_PI;
+    // residual between the measured and predicted values in the measurement space andangle normalization
+    VectorXd z_diff = z - z_pred; 
+    normalizeAngle(z_diff(1));
 
     // update state mean and covariance matrix
     x_pred = x_pred + K * z_diff;

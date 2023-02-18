@@ -183,8 +183,8 @@ void UKF::UpdateLidar(MeasurementPackage meas_package)
   // Step 1) Transfer the predicted sigma points (Xsig_pred_) to the measurement space,
   // i.e. calculate how they will be viewd by the sensor (Zsig) and then, use them to calculate
   // the mean predicted measuremnt (z_pred) and the related covariance matrix (S_pred).
-  predictRadarMeasurement(n_x_, n_aug_, n_z_lidar_, weights_,
-                          std_radr_, std_radphi_, std_radrd_,
+  predictLidarMeasurement(n_x_, n_aug_, n_z_lidar_, weights_,
+                          std_laspx_, std_laspy_,
                           Xsig_pred_,
                           Zsig_lidar_, z_pred_lidar_, S_pred_lidar_); // Output
 

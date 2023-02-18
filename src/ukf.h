@@ -98,6 +98,33 @@ class UKF {
 
   // Sigma point spreading parameter
   double lambda_;
+
+  // Variables used in the algorithm. They can be generated once and used at each step
+  // Radar
+  // Size of the measurement vector
+  int n_z_radar_; 
+
+  // sigma points transfered to the measurement space
+  MatrixXd Zsig_radar_; 
+
+  // mean predicted measurement
+  VectorXd z_pred_radar_;      
+
+  // predicted measurement covariance
+  MatrixXd S_pred_radar_;          
+  // Lidar
+  // Size of the measurement vector
+  int n_z_lidar_;
+
+  // sigma points transfered to the measurement space
+  MatrixXd Zsig_lidar_; 
+
+  // mean predicted measurement
+  VectorXd z_pred_lidar_;               
+
+  // predicted measurement covariance
+  MatrixXd S_pred_lidar_;          
+
 };
 
 #endif  // UKF_H

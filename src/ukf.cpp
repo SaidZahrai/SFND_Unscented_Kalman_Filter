@@ -31,16 +31,19 @@ UKF::UKF()
    */
 
   /**
-   * TODO: Complete the initialization. See ukf.h for other member properties.
-   * Hint: one or more values initialized above might be wildly off...
+   * Initialization of other member properties. 
+   * The two below lines are deleted: 
+   *   std_a_ = 30;
+   *   std_yawdd_ = 30;
+   * and both values are set to 1.0. 
    */
 
   is_initialized_ = false; // initially set to false, set to true in first call of ProcessMeasurement
 
   time_us_ = 0; // time when the state is true, in us
 
-  std_a_ = 0.2;     // Process noise standard deviation longitudinal acceleration in m/s^2 - Value from the course exercise
-  std_yawdd_ = 0.2; // Process noise standard deviation yaw acceleration in rad/s^2 - Value from the course exercise
+  std_a_ = 1.0;     // Process noise standard deviation longitudinal acceleration in m/s^2
+  std_yawdd_ = 1.0; // Process noise standard deviation yaw acceleration in rad/s^2
 
   n_x_ = 5;             // State dimension
   n_aug_ = 7;           // Augmented state dimension
@@ -52,23 +55,37 @@ UKF::UKF()
   Xsig_aug_ = MatrixXd(n_aug_, 2 * n_aug_ + 1); // augmented sigma points matrix
   Xsig_pred_ = MatrixXd(n_x_, 2 * n_aug_ + 1);  // predicted sigma points matrix
   weights_ = VectorXd(2 * n_aug_ + 1);          // Weights of sigma points
-    double weight_0 = lambda_ / (lambda_ + n_aug_);
-    weights_(0) = weight_0;
-    for (int i = 1; i < 2 * n_aug_ + 1; ++i)
-    { 
-        double weight = 0.5 / (n_aug_ + lambda_);
-        weights_(i) = weight;
-    }
+  double weight_0 = lambda_ / (lambda_ + n_aug_);
+  weights_(0) = weight_0;
+  for (int i = 1; i < 2 * n_aug_ + 1; ++i)
+  {
+    double weight = 0.5 / (n_aug_ + lambda_);
+    weights_(i) = weight;
+  }
+
+  // Variables used in the algorithm. They can be generated once and used at each step
+  // Radar
+  n_z_radar_ = 3;                                     // Size of the measurement vector
+  Zsig_radar_ = MatrixXd(n_z_radar_, 2 * n_aug_ + 1); // sigma points transfered to the measurement space
+  z_pred_radar_ = VectorXd(n_z_radar_);               // mean predicted measurement
+  S_pred_radar_ = MatrixXd(n_z_radar_, n_z_radar_);   // predicted measurement covariance
+  // Lidar
+  n_z_lidar_ = 2;                                     // Size of the measurement vector
+  Zsig_lidar_ = MatrixXd(n_z_lidar_, 2 * n_aug_ + 1); // sigma points transfered to the measurement space
+  z_pred_lidar_ = VectorXd(n_z_lidar_);               // mean predicted measurement
+  S_pred_lidar_ = MatrixXd(n_z_lidar_, n_z_lidar_);   // predicted measurement covariance
 }
 
 UKF::~UKF() {}
 
+// The main function to update the states after each measurement.
+// The first time it is called, it sets the state variable to the measured values
+// and the covariance matrix to the values that are available.
+// In the subsequent steps, every time a measurement data arrives, the state variable
+// is updated according to the unscented Kalman filter algorithm by calling other
+// member functions.
 void UKF::ProcessMeasurement(MeasurementPackage meas_package)
 {
-  /**
-   * TODO: Complete this function! Make sure you switch between lidar and radar
-   * measurements.
-   */
   if (!is_initialized_)
   {
     if (meas_package.sensor_type_ == MeasurementPackage::LASER)
@@ -104,11 +121,11 @@ void UKF::ProcessMeasurement(MeasurementPackage meas_package)
     is_initialized_ = true;
     return;
   }
-  // Predict
+  // Prediction independent from the type of incoming data
   double delta_t = (meas_package.timestamp_ - time_us_) / 1e6;
   time_us_ = meas_package.timestamp_;
   Prediction(delta_t);
-  // Update
+  // Update by calling other member functions.
   if (meas_package.sensor_type_ == MeasurementPackage::LASER)
   {
     UpdateLidar(meas_package);
@@ -119,67 +136,63 @@ void UKF::ProcessMeasurement(MeasurementPackage meas_package)
   }
 }
 
+// Prediction based on unscented Kalman filter algorithm.
 void UKF::Prediction(double delta_t)
 {
-  /**
-   * TODO: Complete this function! Estimate the object's location.
-   * Modify the state vector, x_. Predict sigma points, the state,
-   * and the state covariance matrix.
-   */
+  // Step 1) Use the current state vector (x_) and covariance matrix (P_) and define the augmented sigma points (Xsig_aug_)
   augmentedSigmaPoints(n_x_, n_aug_, lambda_,
                        std_a_, std_yawdd_,
                        x_, P_,
-                       Xsig_aug_);
+                       Xsig_aug_); // Output
 
+  // Step 2) For each augmented sigma point (Xsig_aug_) calculate a predicted next point in the state space (Xsig_pred_)
   sigmaPointPrediction(n_x_, n_aug_,
-                       delta_t, Xsig_aug_, Xsig_pred_);
+                       delta_t, Xsig_aug_,
+                       Xsig_pred_); // Output
 
-  predictMeanAndCovariance(n_x_, n_aug_, lambda_, weights_,
-                           Xsig_pred_, x_, P_);
+  // Step 3) Use the predicted sigma points (Xsig_pred_) and precalculated weights (weights_)
+  // to estimate the mean state (x_) and covariance matrix (P_) assumong that a normal noise distrbution
+  predictMeanAndCovariance(n_x_, n_aug_,
+                           weights_, Xsig_pred_,
+                           x_, P_); // Output
 }
 
+// Update the state using a new radar measurement point
 void UKF::UpdateRadar(MeasurementPackage meas_package)
 {
-  /**
-   * TODO: Complete this function! Use lidar data to update the belief
-   * about the object's position. Modify the state vector, x_, and
-   * covariance, P_.
-   * You can also calculate the lidar NIS, if desired.
-   */
-  int n_z = 3;
-  MatrixXd Zsig = MatrixXd(n_z, 2 * n_aug_ + 1); // sigma points transfered to the measurement space
-  VectorXd z_pred = VectorXd(n_z);               // mean predicted measurement
-  MatrixXd S_pred = MatrixXd(n_z, n_z);          // predicted measurement covariance
-
-  predictRadarMeasurement(n_x_, n_aug_, n_z, lambda_, weights_,
+  // Step 1) Transfer the predicted sigma points (Xsig_pred_) to the measurement space,
+  // i.e. calculate how they will be viewd by the sensor (Zsig) and then, use them to calculate
+  // the mean predicted measuremnt (z_pred) and the related covariance matrix (S_pred).
+  predictRadarMeasurement(n_x_, n_aug_, n_z_radar_, weights_,
                           std_radr_, std_radphi_, std_radrd_,
                           Xsig_pred_,
-                          Zsig, z_pred, S_pred);
+                          Zsig_radar_, z_pred_radar_, S_pred_radar_); // Output
 
-  updateState(n_x_, n_aug_, n_z, lambda_, weights_,
-              Zsig, z_pred, S_pred, meas_package.raw_measurements_,
-              Xsig_pred_, x_, P_);
+  // Step 2) Use the predicted values, sigma points both in the state space (Xsig_pred_) and in the measurement space (Zsig),
+  // mean vector (z_pred) and the corresponding predicted covariance matrix (S_pred) and
+  // update the state vector (x_) and the covariance matrix (P_)
+  updateState(n_x_, n_aug_, n_z_radar_, weights_,
+              Zsig_radar_, z_pred_radar_, S_pred_radar_, meas_package.raw_measurements_,
+              Xsig_pred_,
+              x_, P_); // Input/Output - Will be updated
 }
 
+// Update the state using a new lidar measurement point
 void UKF::UpdateLidar(MeasurementPackage meas_package)
 {
-  /**
-   * TODO: Complete this function! Use radar data to update the belief
-   * about the object's position. Modify the state vector, x_, and
-   * covariance, P_.
-   * You can also calculate the radar NIS, if desired.
-   */
-  int n_z = 2;
-  MatrixXd Zsig = MatrixXd(n_z, 2 * n_aug_ + 1); // sigma points transfered to the measurement space
-  VectorXd z_pred = VectorXd(n_z);               // mean predicted measurement
-  MatrixXd S_pred = MatrixXd(n_z, n_z);          // predicted measurement covariance
-
-  predictLidarMeasurement(n_x_, n_aug_, n_z, lambda_, weights_,
-                          std_laspx_, std_laspy_,
+  // Step 1) Transfer the predicted sigma points (Xsig_pred_) to the measurement space,
+  // i.e. calculate how they will be viewd by the sensor (Zsig) and then, use them to calculate
+  // the mean predicted measuremnt (z_pred) and the related covariance matrix (S_pred).
+  predictRadarMeasurement(n_x_, n_aug_, n_z_lidar_, weights_,
+                          std_radr_, std_radphi_, std_radrd_,
                           Xsig_pred_,
-                          Zsig, z_pred, S_pred);
+                          Zsig_lidar_, z_pred_lidar_, S_pred_lidar_); // Output
 
-  updateState(n_x_, n_aug_, n_z, lambda_, weights_,
-              Zsig, z_pred, S_pred, meas_package.raw_measurements_,
-              Xsig_pred_, x_, P_);
+  // Step 2) Use the predicted values, sigma points both in the state space (Xsig_pred_) and in the measurement space (Zsig),
+  // mean vector (z_pred) and the corresponding predicted covariance matrix (S_pred) and
+  // update the state vector (x_) and the covariance matrix (P_)
+  updateState(n_x_, n_aug_, n_z_lidar_, weights_,
+              Zsig_lidar_, z_pred_lidar_, S_pred_lidar_, meas_package.raw_measurements_,
+              Xsig_pred_,
+              x_, P_); // Input/Output - Will be updated
 }

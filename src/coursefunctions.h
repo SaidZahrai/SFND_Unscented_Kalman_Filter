@@ -1,3 +1,10 @@
+/*
+    This file contains the functions that together implement the unscented Kalman filter, as described
+    and implemmented in the course. The changes are minimal and are only to remove unnecessary calculations
+    or rewrite of the code. All input (and output) vactors and matrices are defined as references to avoid
+    variable copying.
+*/
+
 #include "Eigen/Dense"
 
 using Eigen::MatrixXd;
@@ -5,9 +12,11 @@ using Eigen::VectorXd;
 
 // Help function to avoid rewriting the same code
 void normalizeAngle(double angle)
-{    
-    while (angle > M_PI) angle -= 2. * M_PI;
-    while (angle < -M_PI) angle += 2. * M_PI;
+{
+  while (angle > M_PI)
+    angle -= 2. * M_PI;
+  while (angle < -M_PI)
+    angle += 2. * M_PI;
 }
 
 // Rewrite of the lesson exercise
@@ -19,34 +28,34 @@ void augmentedSigmaPoints(int n_x, int n_aug, double lambda,
                           MatrixXd &Xsig_aug)
 {
 
-    // create augmented mean vector
-    VectorXd x_aug = VectorXd(7);
+  // create augmented mean vector
+  VectorXd x_aug = VectorXd(7);
 
-    // create augmented state covariance
-    MatrixXd P_aug = MatrixXd(7, 7);
+  // create augmented state covariance
+  MatrixXd P_aug = MatrixXd(7, 7);
 
-    // create augmented mean state
-    x_aug.head(5) = x;
-    x_aug(5) = 0;
-    x_aug(6) = 0;
+  // create augmented mean state
+  x_aug.head(5) = x;
+  x_aug(5) = 0;
+  x_aug(6) = 0;
 
-    // create augmented covariance matrix
-    P_aug.fill(0.0);
-    P_aug.topLeftCorner(5, 5) = P;
-    P_aug(5, 5) = std_a * std_a;
-    P_aug(6, 6) = std_yawdd * std_yawdd;
+  // create augmented covariance matrix
+  P_aug.fill(0.0);
+  P_aug.topLeftCorner(5, 5) = P;
+  P_aug(5, 5) = std_a * std_a;
+  P_aug(6, 6) = std_yawdd * std_yawdd;
 
-    // create square root matrix
-    MatrixXd L = P_aug.llt().matrixL();
+  // create square root matrix
+  MatrixXd L = P_aug.llt().matrixL();
 
-    // create augmented sigma points
-    Xsig_aug.col(0) = x_aug;
+  // create augmented sigma points
+  Xsig_aug.col(0) = x_aug;
 
-    for (int i = 0; i < n_aug; ++i)
-    {
-        Xsig_aug.col(i + 1) = x_aug + sqrt(lambda + n_aug) * L.col(i);
-        Xsig_aug.col(i + 1 + n_aug) = x_aug - sqrt(lambda + n_aug) * L.col(i);
-    }
+  for (int i = 0; i < n_aug; ++i)
+  {
+    Xsig_aug.col(i + 1) = x_aug + sqrt(lambda + n_aug) * L.col(i);
+    Xsig_aug.col(i + 1 + n_aug) = x_aug - sqrt(lambda + n_aug) * L.col(i);
+  }
 }
 
 // Rewrite of the lesson exercise
@@ -57,177 +66,177 @@ void sigmaPointPrediction(int n_x, int n_aug, double delta_t,
                           MatrixXd &Xsig_pred)
 {
 
-    // predict sigma points
-    for (int i = 0; i < 2 * n_aug + 1; ++i)
+  // predict sigma points
+  for (int i = 0; i < 2 * n_aug + 1; ++i)
+  {
+    // extract values for better readability
+    double p_x = Xsig_aug(0, i);
+    double p_y = Xsig_aug(1, i);
+    double v = Xsig_aug(2, i);
+    double yaw = Xsig_aug(3, i);
+    double yawd = Xsig_aug(4, i);
+    double nu_a = Xsig_aug(5, i);
+    double nu_yawdd = Xsig_aug(6, i);
+
+    // predicted state values
+    double px_p, py_p;
+
+    // avoid division by zero
+    if (fabs(yawd) > 0.001)
     {
-        // extract values for better readability
-        double p_x = Xsig_aug(0, i);
-        double p_y = Xsig_aug(1, i);
-        double v = Xsig_aug(2, i);
-        double yaw = Xsig_aug(3, i);
-        double yawd = Xsig_aug(4, i);
-        double nu_a = Xsig_aug(5, i);
-        double nu_yawdd = Xsig_aug(6, i);
-
-        // predicted state values
-        double px_p, py_p;
-
-        // avoid division by zero
-        if (fabs(yawd) > 0.001)
-        {
-            px_p = p_x + v / yawd * (sin(yaw + yawd * delta_t) - sin(yaw));
-            py_p = p_y + v / yawd * (cos(yaw) - cos(yaw + yawd * delta_t));
-        }
-        else
-        {
-            px_p = p_x + v * delta_t * cos(yaw);
-            py_p = p_y + v * delta_t * sin(yaw);
-        }
-
-        double v_p = v;
-        double yaw_p = yaw + yawd * delta_t;
-        double yawd_p = yawd;
-
-        // add noise
-        px_p = px_p + 0.5 * nu_a * delta_t * delta_t * cos(yaw);
-        py_p = py_p + 0.5 * nu_a * delta_t * delta_t * sin(yaw);
-        v_p = v_p + nu_a * delta_t;
-
-        yaw_p = yaw_p + 0.5 * nu_yawdd * delta_t * delta_t;
-        normalizeAngle(yaw_p);
-        yawd_p = yawd_p + nu_yawdd * delta_t;
-
-        // write predicted sigma point into right column
-        Xsig_pred(0, i) = px_p;
-        Xsig_pred(1, i) = py_p;
-        Xsig_pred(2, i) = v_p;
-        Xsig_pred(3, i) = yaw_p;
-        Xsig_pred(4, i) = yawd_p;
+      px_p = p_x + v / yawd * (sin(yaw + yawd * delta_t) - sin(yaw));
+      py_p = p_y + v / yawd * (cos(yaw) - cos(yaw + yawd * delta_t));
     }
+    else
+    {
+      px_p = p_x + v * delta_t * cos(yaw);
+      py_p = p_y + v * delta_t * sin(yaw);
+    }
+
+    double v_p = v;
+    double yaw_p = yaw + yawd * delta_t;
+    double yawd_p = yawd;
+
+    // add noise
+    px_p = px_p + 0.5 * nu_a * delta_t * delta_t * cos(yaw);
+    py_p = py_p + 0.5 * nu_a * delta_t * delta_t * sin(yaw);
+    v_p = v_p + nu_a * delta_t;
+
+    yaw_p = yaw_p + 0.5 * nu_yawdd * delta_t * delta_t;
+    normalizeAngle(yaw_p);
+    yawd_p = yawd_p + nu_yawdd * delta_t;
+
+    // write predicted sigma point into right column
+    Xsig_pred(0, i) = px_p;
+    Xsig_pred(1, i) = py_p;
+    Xsig_pred(2, i) = v_p;
+    Xsig_pred(3, i) = yaw_p;
+    Xsig_pred(4, i) = yawd_p;
+  }
 }
 
 // Rewrite of the lesson exercise
 // Starting from a set of sigma points, it uses weights to calculate the mean state and covariance matrix
-void predictMeanAndCovariance(int n_x, int n_aug, double lambda, VectorXd weights,
+void predictMeanAndCovariance(int n_x, int n_aug, VectorXd weights,
                               MatrixXd &Xsig_pred,
                               VectorXd &x, MatrixXd &P)
 {
-    // predicted state mean
-    x.fill(0.0);
-    for (int i = 0; i < 2 * n_aug + 1; ++i)
-    {
-        x = x + weights(i) * Xsig_pred.col(i);
-    }
-    normalizeAngle(x(3));
+  // predicted state mean
+  x.fill(0.0);
+  for (int i = 0; i < 2 * n_aug + 1; ++i)
+  {
+    x = x + weights(i) * Xsig_pred.col(i);
+  }
+  normalizeAngle(x(3));
 
-    // predicted state covariance matrix
-    P.fill(0.0);
-    for (int i = 0; i < 2 * n_aug + 1; ++i)
-    {
-        // state difference and angle normalization
-        VectorXd x_diff = Xsig_pred.col(i) - x;
-        normalizeAngle(x_diff(3));
-        
-        P = P + weights(i) * x_diff * x_diff.transpose();
-    }
+  // predicted state covariance matrix
+  P.fill(0.0);
+  for (int i = 0; i < 2 * n_aug + 1; ++i)
+  {
+    // state difference and angle normalization
+    VectorXd x_diff = Xsig_pred.col(i) - x;
+    normalizeAngle(x_diff(3));
+
+    P = P + weights(i) * x_diff * x_diff.transpose();
+  }
 }
 
 // Rewrite of the lesson exercise
-// Starting from the set of predicted sigma pointsin state space, it first uses the measurement model
+// Starting from the set of predicted sigma points in state space, it first uses the measurement model
 // to calculate how the states would be seen by the radar, and then, it uses weights to calculate the
 // mean state and covariance matrix of the transforemed sigma point in the radar measurement space.
-void predictRadarMeasurement(int n_x, int n_aug, int n_z, double lambda, VectorXd weights,
+void predictRadarMeasurement(int n_x, int n_aug, int n_z, VectorXd weights,
                              double std_radr, double std_radphi, double std_radrd,
                              MatrixXd &Xsig_pred,
                              MatrixXd &Zsig, VectorXd &z_pred, MatrixXd &S)
 {
-    // transform sigma points into measurement space
-    for (int i = 0; i < 2 * n_aug + 1; ++i)
-    { // 2n+1 simga points
-        // extract values for better readability
-        double p_x = Xsig_pred(0, i);
-        double p_y = Xsig_pred(1, i);
-        double v = Xsig_pred(2, i);
-        double yaw = Xsig_pred(3, i);
+  // transform sigma points into measurement space
+  for (int i = 0; i < 2 * n_aug + 1; ++i)
+  { // 2n+1 simga points
+    // extract values for better readability
+    double p_x = Xsig_pred(0, i);
+    double p_y = Xsig_pred(1, i);
+    double v = Xsig_pred(2, i);
+    double yaw = Xsig_pred(3, i);
 
-        double v1 = cos(yaw) * v;
-        double v2 = sin(yaw) * v;
+    double v1 = cos(yaw) * v;
+    double v2 = sin(yaw) * v;
 
-        // measurement model
-        Zsig(0, i) = sqrt(p_x * p_x + p_y * p_y);                         // r
-        Zsig(1, i) = atan2(p_y, p_x);                                     // phi
-        Zsig(2, i) = (p_x * v1 + p_y * v2) / sqrt(p_x * p_x + p_y * p_y); // r_dot
-    }
-    // mean predicted measurement and normalization
-    z_pred.fill(0.0);
-    for (int i = 0; i < 2 * n_aug + 1; ++i)
-    {
-        z_pred = z_pred + weights(i) * Zsig.col(i);
-    }
-    normalizeAngle(z_pred(1));
+    // measurement model
+    Zsig(0, i) = sqrt(p_x * p_x + p_y * p_y);                         // r
+    Zsig(1, i) = atan2(p_y, p_x);                                     // phi
+    Zsig(2, i) = (p_x * v1 + p_y * v2) / sqrt(p_x * p_x + p_y * p_y); // r_dot
+  }
+  // mean predicted measurement and normalization
+  z_pred.fill(0.0);
+  for (int i = 0; i < 2 * n_aug + 1; ++i)
+  {
+    z_pred = z_pred + weights(i) * Zsig.col(i);
+  }
+  normalizeAngle(z_pred(1));
 
-    // innovation covariance matrix S
-    S.fill(0.0);
-    for (int i = 0; i < 2 * n_aug + 1; ++i)
-    { 
-        VectorXd z_diff = Zsig.col(i) - z_pred;
-        S = S + weights(i) * z_diff * z_diff.transpose();
-    }
+  // innovation covariance matrix S
+  S.fill(0.0);
+  for (int i = 0; i < 2 * n_aug + 1; ++i)
+  {
+    VectorXd z_diff = Zsig.col(i) - z_pred;
+    S = S + weights(i) * z_diff * z_diff.transpose();
+  }
 
-    // add measurement noise covariance matrix
-    MatrixXd R = MatrixXd(n_z, n_z);
-    R << std_radr * std_radr, 0, 0,
-        0, std_radphi * std_radphi, 0,
-        0, 0, std_radrd * std_radrd;
-    S = S + R;
+  // add measurement noise covariance matrix
+  MatrixXd R = MatrixXd(n_z, n_z);
+  R << std_radr * std_radr, 0, 0,
+      0, std_radphi * std_radphi, 0,
+      0, 0, std_radrd * std_radrd;
+  S = S + R;
 }
 
 // Rewrite of the lesson exercise and adapted to Lidar
 // Starting from the set of predicted sigma pointsin state space, it first uses the measurement model
 // to calculate how the states would be seen by the radar, and then, it uses weights to calculate the
 // mean state and covariance matrix of the transforemed sigma point in the radar measurement space.
-void predictLidarMeasurement(int n_x, int n_aug, int n_z, double lambda, VectorXd weights,
+void predictLidarMeasurement(int n_x, int n_aug, int n_z, VectorXd weights,
                              double std_lidx, double std_lidy,
                              MatrixXd &Xsig_pred,
                              MatrixXd &Zsig, VectorXd &z_pred, MatrixXd &S)
 {
-    // transform sigma points into measurement space
-    for (int i = 0; i < 2 * n_aug + 1; ++i)
-    { // 2n+1 simga points
-        // extract values for better readability
-        double p_x = Xsig_pred(0, i);
-        double p_y = Xsig_pred(1, i);
-        double v = Xsig_pred(2, i);
-        double yaw = Xsig_pred(3, i);
+  // transform sigma points into measurement space
+  for (int i = 0; i < 2 * n_aug + 1; ++i)
+  { // 2n+1 simga points
+    // extract values for better readability
+    double p_x = Xsig_pred(0, i);
+    double p_y = Xsig_pred(1, i);
+    double v = Xsig_pred(2, i);
+    double yaw = Xsig_pred(3, i);
 
-        double v1 = cos(yaw) * v;
-        double v2 = sin(yaw) * v;
+    double v1 = cos(yaw) * v;
+    double v2 = sin(yaw) * v;
 
-        // measurement model
-        Zsig(0, i) = p_x; // x
-        Zsig(1, i) = p_y; // y
-    }
+    // measurement model
+    Zsig(0, i) = p_x; // x
+    Zsig(1, i) = p_y; // y
+  }
 
-    // mean predicted measurement
-    z_pred.fill(0.0);
-    for (int i = 0; i < 2 * n_aug + 1; ++i)
-    {
-        z_pred = z_pred + weights(i) * Zsig.col(i);
-    }
+  // mean predicted measurement
+  z_pred.fill(0.0);
+  for (int i = 0; i < 2 * n_aug + 1; ++i)
+  {
+    z_pred = z_pred + weights(i) * Zsig.col(i);
+  }
 
-    // innovation covariance matrix S
-    S.fill(0.0);
-    for (int i = 0; i < 2 * n_aug + 1; ++i)
-    {
-        VectorXd z_diff = Zsig.col(i) - z_pred;
-        S = S + weights(i) * z_diff * z_diff.transpose();
-    }
+  // innovation covariance matrix S
+  S.fill(0.0);
+  for (int i = 0; i < 2 * n_aug + 1; ++i)
+  {
+    VectorXd z_diff = Zsig.col(i) - z_pred;
+    S = S + weights(i) * z_diff * z_diff.transpose();
+  }
 
-    // add measurement noise covariance matrix
-    MatrixXd R = MatrixXd(n_z, n_z);
-    R << std_lidx * std_lidx, 0,
-        0, std_lidy * std_lidy;
-    S = S + R;
+  // add measurement noise covariance matrix
+  MatrixXd R = MatrixXd(n_z, n_z);
+  R << std_lidx * std_lidx, 0,
+      0, std_lidy * std_lidy;
+  S = S + R;
 }
 
 // Rewrite of the lesson exercise
@@ -240,33 +249,33 @@ void predictLidarMeasurement(int n_x, int n_aug, int n_z, double lambda, VectorX
 // update the mean state by x_pred = x_pred + K * z_diff.
 // Equally, the predicted covariance matrix is updated by P_pred = P_pred - K * S * K.transpose();.
 
-void updateState(int n_x, int n_aug, int n_z, double lambda, VectorXd weights,
+void updateState(int n_x, int n_aug, int n_z, VectorXd weights,
                  MatrixXd &Zsig, VectorXd &z_pred, MatrixXd &S, VectorXd &z,
                  MatrixXd &Xsig_pred, VectorXd &x_pred, MatrixXd &P_pred)
 {
-    // calculate cross correlation matrix using 2n+1 simga points
-    MatrixXd Tc = MatrixXd(n_x, n_z);
-    Tc.fill(0.0);
-    for (int i = 0; i < 2 * n_aug + 1; ++i)
-    {
-        // Calculate measurement differences and normalize the angle, i.e. the 2nd element
-        VectorXd z_diff = Zsig.col(i) - z_pred;
-        normalizeAngle(z_diff(1));
-        
-        // Calculate state differences and normalize the angle, i.e. the 4th element
-        VectorXd x_diff = Xsig_pred.col(i) - x_pred; 
-        normalizeAngle(x_diff(3));
-        
-        Tc = Tc + weights(i) * x_diff * z_diff.transpose();
-    }
-
-    MatrixXd K = Tc * S.inverse(); // Kalman gain K;
-
-    // residual between the measured and predicted values in the measurement space andangle normalization
-    VectorXd z_diff = z - z_pred; 
+  // calculate cross correlation matrix using 2n+1 simga points
+  MatrixXd Tc = MatrixXd(n_x, n_z);
+  Tc.fill(0.0);
+  for (int i = 0; i < 2 * n_aug + 1; ++i)
+  {
+    // Calculate measurement differences and normalize the angle, i.e. the 2nd element
+    VectorXd z_diff = Zsig.col(i) - z_pred;
     normalizeAngle(z_diff(1));
 
-    // update state mean and covariance matrix
-    x_pred = x_pred + K * z_diff;
-    P_pred = P_pred - K * S * K.transpose();
+    // Calculate state differences and normalize the angle, i.e. the 4th element
+    VectorXd x_diff = Xsig_pred.col(i) - x_pred;
+    normalizeAngle(x_diff(3));
+
+    Tc = Tc + weights(i) * x_diff * z_diff.transpose();
+  }
+
+  MatrixXd K = Tc * S.inverse(); // Kalman gain K;
+
+  // residual between the measured and predicted values in the measurement space andangle normalization
+  VectorXd z_diff = z - z_pred;
+  normalizeAngle(z_diff(1));
+
+  // update state mean and covariance matrix
+  x_pred = x_pred + K * z_diff;
+  P_pred = P_pred - K * S * K.transpose();
 }

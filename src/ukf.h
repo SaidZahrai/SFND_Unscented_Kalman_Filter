@@ -105,25 +105,25 @@ class UKF {
   int n_z_radar_; 
 
   // sigma points transfered to the measurement space
-  MatrixXd Zsig_radar_; 
+  Eigen::MatrixXd Zsig_radar_; 
 
   // mean predicted measurement
-  VectorXd z_pred_radar_;      
+  Eigen::VectorXd z_pred_radar_;      
 
   // predicted measurement covariance
-  MatrixXd S_pred_radar_;          
+  Eigen::MatrixXd S_pred_radar_;          
   // Lidar
   // Size of the measurement vector
   int n_z_lidar_;
 
   // sigma points transfered to the measurement space
-  MatrixXd Zsig_lidar_; 
+  Eigen::MatrixXd Zsig_lidar_; 
 
   // mean predicted measurement
-  VectorXd z_pred_lidar_;               
+  Eigen::VectorXd z_pred_lidar_;               
 
   // predicted measurement covariance
-  MatrixXd S_pred_lidar_;          
+  Eigen::MatrixXd S_pred_lidar_;          
 
 };
 
